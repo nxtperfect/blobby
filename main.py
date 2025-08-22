@@ -4,17 +4,20 @@ import discord
 from discord.ext import commands
 
 
-class Blobby(discord.Client):
-    _TOKEN: str | None
+class Blobby(commands.Bot):
     prefix: str = "#!"
     players_started_platformer: dict[str, int] = {}
+    _board: str = f"{'◽'*4}\n{'◼️'*3}◽\n👺{'◽'*3}\n{'◼️'*4}"
+    _movement: dict[str, str] = {"⬆️": "UP", "⬇️": "DOWN", "⬅️": "LEFT", "➡️": "RIGHT"}
 
-    def __init__(self, intents=discord.Intents.default()):
-        load_dotenv()
-        self._TOKEN = getenv("DISCORD_TOKEN")
+    def __init__(self, intents: discord.Intents | None = None):
+        if not intents:
+            intents = discord.Intents.default()
+        _ = load_dotenv()
+        self._TOKEN: str | None = getenv("DISCORD_TOKEN")
         intents.messages = True
         intents.message_content = True
-        super().__init__(intents=intents)
+        super().__init__(self.prefix, intents=intents)
 
     async def on_ready(self):
         print(f"{super().user} connected!")
@@ -72,6 +75,17 @@ class Blobby(discord.Client):
         embed = await self._start_platformer(member, channel)
         await self._add_movement_keys(embed)
         # If already started read movements
+        # Read reactions under message
+        # If user who started added reaction
+        # take the first one and move
+        # then reset reactions
+        # and loop again
+        reaction = await self.wait_for(
+            "reaction_add", check=lambda _, user: user.id == member.id
+        )
+
+        await self._move(reaction[0])
+        # await channel.send(f"{member} reacted with {reaction[0]}")
 
     async def _start_platformer(self, member, channel):
         board = self._build_platformer_board()
@@ -83,13 +97,19 @@ class Blobby(discord.Client):
         return await channel.send(embed=embedVar)
 
     def _build_platformer_board(self):
-        return f"{'◽'*4}\n{'◼️'*3}◽\n👺{'◽'*3}\n{'◼️'*4}"
+        # Randomize platform but make it possible to finish?
+        return self._board
 
     async def _add_movement_keys(self, message):
         await message.add_reaction(str("⬅️"))
         await message.add_reaction(str("➡️"))
         await message.add_reaction(str("⬆️"))
         await message.add_reaction(str("⬇️"))
+
+    async def _move(self, emoji):
+        move = self._movement.get(emoji, None)
+        if not move:
+            return False
 
     def run(self):
         super().run(self._TOKEN)

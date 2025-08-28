@@ -2,13 +2,22 @@ from os import getenv
 from dotenv import load_dotenv
 import discord
 from discord.ext import commands
+import numpy as np
+from random import shuffle
 
 
 class Blobby(commands.Bot):
     prefix: str = "#!"
     players_started_platformer: dict[str, int] = {}
     _board: str = f"{'◽'*4}\n{'◼️'*3}◽\n👺{'◽'*3}\n{'◼️'*4}"
-    _movement: dict[str, str] = {"⬆️": "UP", "⬇️": "DOWN", "⬅️": "LEFT", "➡️": "RIGHT"}
+    _board_size: int = 6
+    _movement: dict[str, tuple[int, int]] = {
+        "⬆️": (-1, 0),
+        "⬇️": (1, 0),
+        "⬅️": (0, -1),
+        "➡️": (0, 1),
+    }
+    _player_location: tuple[int, int] = (2, 0)
 
     def __init__(self, intents: discord.Intents | None = None):
         if not intents:
@@ -85,6 +94,8 @@ class Blobby(commands.Bot):
         )
 
         await self._move(reaction[0])
+        # Redraw the board now
+        self._build_platformer_board()
         # await channel.send(f"{member} reacted with {reaction[0]}")
 
     async def _start_platformer(self, member, channel):
@@ -98,6 +109,18 @@ class Blobby(commands.Bot):
 
     def _build_platformer_board(self):
         # Randomize platform but make it possible to finish?
+        # start in some random spot on the border
+        # then check neighbors in random order
+        # if they're within boundaries and are a wall
+        # go there
+        # if not, remove current pos from stack
+        # and continue
+
+        starting_positions: list[tuple[int, int]] = [
+            (0, x) for x in range(self._board_size)
+        ]
+        starting_positions.append([(y, 0) for y in range(self._board_size)])
+        shuffle(starting_positions)
         return self._board
 
     async def _add_movement_keys(self, message):
@@ -110,6 +133,17 @@ class Blobby(commands.Bot):
         move = self._movement.get(emoji, None)
         if not move:
             return False
+
+        # Move player
+        # Need to know where player is
+        # if move will be out of bounds
+        # if yes re-render the message with no move
+        temp = np.add(self._player_location, move)
+        if temp[0] not in range(0, len(self._board)) or temp[1] not in range(
+            0, len(self._board[0])
+        ):
+            return False
+        self._player_location = temp
 
     def run(self):
         super().run(self._TOKEN)

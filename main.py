@@ -1,3 +1,4 @@
+from collections import deque
 from os import getenv
 from dotenv import load_dotenv
 import discord
@@ -121,6 +122,26 @@ class Blobby(commands.Bot):
         ]
         starting_positions.append([(y, 0) for y in range(self._board_size)])
         shuffle(starting_positions)
+
+        # Start in starting_positions[0]
+        # go dfs
+        queue = deque()
+        queue.append(starting_positions[0])
+        random_directions = self._movement.values()
+        shuffle(random_directions)
+        # dfs try to reach the player
+        # only move if that tile is a wall - 1
+        while queue:
+            x, y = queue.pop()
+            for rx, ry in random_directions:
+                nx, ny = x + rx, y + ry
+                if nx not in range(self._board_size) or ny not in range(
+                    self._board_size
+                ):
+                    continue
+                if self.board[nx][ny] == 1:
+                    queue.append((nx, ny))
+            pass
         return self._board
 
     async def _add_movement_keys(self, message):

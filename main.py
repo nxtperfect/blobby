@@ -6,12 +6,16 @@ from discord.ext import commands
 import numpy as np
 from random import shuffle
 
+PLAYER_TILE = 2
+WALL_TILE = 1
+EMPTY_TILE = 0
+
 
 class Blobby(commands.Bot):
     prefix: str = "#!"
     players_started_platformer: dict[str, int] = {}
-    _board: str = f"{'◽'*4}\n{'◼️'*3}◽\n👺{'◽'*3}\n{'◼️'*4}"
     _board_size: int = 6
+    board: list[list[int]]
     _movement: dict[str, tuple[int, int]] = {
         "⬆️": (-1, 0),
         "⬇️": (1, 0),
@@ -24,6 +28,7 @@ class Blobby(commands.Bot):
         if not intents:
             intents = discord.Intents.default()
         _ = load_dotenv()
+        self.board = [[WALL_TILE] * self._board_size for _ in range(self._board_size)]
         self._TOKEN: str | None = getenv("DISCORD_TOKEN")
         intents.messages = True
         intents.message_content = True
@@ -109,14 +114,6 @@ class Blobby(commands.Bot):
         return await channel.send(embed=embedVar)
 
     def _build_platformer_board(self):
-        # Randomize platform but make it possible to finish?
-        # start in some random spot on the border
-        # then check neighbors in random order
-        # if they're within boundaries and are a wall
-        # go there
-        # if not, remove current pos from stack
-        # and continue
-
         starting_positions: list[tuple[int, int]] = [
             (0, x) for x in range(self._board_size)
         ]
@@ -126,23 +123,36 @@ class Blobby(commands.Bot):
         # Start in starting_positions[0]
         # go dfs
         queue = deque()
+        print(starting_positions)
         queue.append(starting_positions[0])
-        random_directions = self._movement.values()
-        shuffle(random_directions)
+        random_directions = list(self._movement.values())
         # dfs try to reach the player
-        # only move if that tile is a wall - 1
+        # only move if that tile is a wall
+        print(self.board)
+        player_pos = (-1, -1)
         while queue:
             x, y = queue.pop()
+            shuffle(random_directions)
+            self.board[x][y] = 0
+
             for rx, ry in random_directions:
                 nx, ny = x + rx, y + ry
                 if nx not in range(self._board_size) or ny not in range(
                     self._board_size
                 ):
                     continue
-                if self.board[nx][ny] == 1:
+                if self.board[nx][ny] == PLAYER_TILE:
+                    queue.clear()
+                    break
+                if self.board[nx][ny] == WALL_TILE:
                     queue.append((nx, ny))
-            pass
-        return self._board
+                    break
+            if not queue:
+                player_pos = (x, y)
+        # Draw the board
+        self.board[player_pos[0]][player_pos[1]] = PLAYER_TILE
+        print(self.board)
+        return self._convert_raw_board_to_emoji(self.board)
 
     async def _add_movement_keys(self, message):
         await message.add_reaction(str("⬅️"))
@@ -155,16 +165,32 @@ class Blobby(commands.Bot):
         if not move:
             return False
 
-        # Move player
-        # Need to know where player is
-        # if move will be out of bounds
-        # if yes re-render the message with no move
         temp = np.add(self._player_location, move)
         if temp[0] not in range(0, len(self._board)) or temp[1] not in range(
             0, len(self._board[0])
         ):
             return False
         self._player_location = temp
+
+    def _convert_raw_board_to_emoji(self, board: list[list[int]]):
+        final_board: list[list[int]] = []
+        for row in board:
+            new_row = []
+            for cell in row:
+                if cell == PLAYER_TILE:
+                    new_row.append("👺")
+                    continue
+                if cell == WALL_TILE:
+                    new_row.append("◼️")
+                    continue
+                if cell == EMPTY_TILE:
+                    new_row.append("◽")
+                    continue
+                print(f"Invalid cell in board {cell}")
+            final_board.append(new_row)
+        # self.board = ''.join(['\n'.join(x) for x in final_board])
+        # return final_board
+        return "\n".join(["".join(x) for x in final_board])
 
     def run(self):
         super().run(self._TOKEN)

@@ -6,9 +6,10 @@ from discord.ext import commands
 import numpy as np
 from random import shuffle
 
-PLAYER_TILE = 2
-WALL_TILE = 1
 EMPTY_TILE = 0
+WALL_TILE = 1
+PLAYER_TILE = 2
+EXIT_TILE = 3
 
 
 class Blobby(commands.Bot):
@@ -22,7 +23,9 @@ class Blobby(commands.Bot):
         "⬅️": (0, -1),
         "➡️": (0, 1),
     }
-    _player_location: tuple[int, int] = (2, 0)
+    _player_location: tuple[int, int] = (-1, -1)
+    _exit_location: tuple[int, int]
+    _is_game_finished = False
 
     def __init__(self, intents: discord.Intents | None = None):
         if not intents:
@@ -123,17 +126,18 @@ class Blobby(commands.Bot):
         # Start in starting_positions[0]
         # go dfs
         queue = deque()
-        print(starting_positions)
+        # print(starting_positions)
         queue.append(starting_positions[0])
         random_directions = list(self._movement.values())
         # dfs try to reach the player
         # only move if that tile is a wall
-        print(self.board)
-        player_pos = (-1, -1)
+        # print(self.board)
         while queue:
             x, y = queue.pop()
             shuffle(random_directions)
             self.board[x][y] = 0
+            if not self._exit_location:
+                self._exit_location = (x, y)
 
             for rx, ry in random_directions:
                 nx, ny = x + rx, y + ry
@@ -148,10 +152,11 @@ class Blobby(commands.Bot):
                     queue.append((nx, ny))
                     break
             if not queue:
-                player_pos = (x, y)
+                self._player_location = (x, y)
         # Draw the board
-        self.board[player_pos[0]][player_pos[1]] = PLAYER_TILE
-        print(self.board)
+        self.board[self._player_location[0]][self._player_location[1]] = PLAYER_TILE
+        self.board[self._exit_location[0]][self._exit_location[1]] = EXIT_TILE
+        # print(self.board)
         return self._convert_raw_board_to_emoji(self.board)
 
     async def _add_movement_keys(self, message):
@@ -170,6 +175,8 @@ class Blobby(commands.Bot):
             0, len(self._board[0])
         ):
             return False
+        if temp[0] == self._exit_location[0] and temp[1] == self._exit_location[1]:
+            self._is_game_finished = True
         self._player_location = temp
 
     def _convert_raw_board_to_emoji(self, board: list[list[int]]):
@@ -177,6 +184,9 @@ class Blobby(commands.Bot):
         for row in board:
             new_row = []
             for cell in row:
+                if cell == EXIT_TILE:
+                    new_row.append("🚪")
+                    continue
                 if cell == PLAYER_TILE:
                     new_row.append("👺")
                     continue
@@ -197,7 +207,7 @@ class Blobby(commands.Bot):
 
 
 def main():
-    print("Hello from blobby!")
+    # print("Hello from blobby!")
     client = Blobby()
     client.run()
 

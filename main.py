@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import discord
 from discord.ext import commands
 import numpy as np
-from random import shuffle
+from random import choice, randrange, shuffle
 
 EMPTY_TILE = 0
 WALL_TILE = 1
@@ -15,7 +15,7 @@ EXIT_TILE = 3
 class Blobby(commands.Bot):
     prefix: str = "#!"
     players_started_platformer: dict[str, int] = {}
-    _board_size: int = 6
+    _board_size: int = 12
     board: list[list[int]]
     _movement: dict[str, tuple[int, int]] = {
         "⬆️": (-1, 0),
@@ -24,7 +24,7 @@ class Blobby(commands.Bot):
         "➡️": (0, 1),
     }
     _player_location: tuple[int, int] = (-1, -1)
-    _exit_location: tuple[int, int]
+    _exit_location: tuple[int, int] | None = None
     _is_game_finished = False
 
     def __init__(self, intents: discord.Intents | None = None):
@@ -120,24 +120,21 @@ class Blobby(commands.Bot):
         starting_positions: list[tuple[int, int]] = [
             (0, x) for x in range(self._board_size)
         ]
-        starting_positions.append([(y, 0) for y in range(self._board_size)])
+        starting_positions = starting_positions + [
+            (y, 0) for y in range(self._board_size)
+        ]
         shuffle(starting_positions)
 
-        # Start in starting_positions[0]
-        # go dfs
         queue = deque()
-        # print(starting_positions)
         queue.append(starting_positions[0])
         random_directions = list(self._movement.values())
-        # dfs try to reach the player
-        # only move if that tile is a wall
-        # print(self.board)
+        visited_cells: list[tuple[int, int]] = []
+
         while queue:
             x, y = queue.pop()
+            visited_cells.append((x, y))
             shuffle(random_directions)
             self.board[x][y] = 0
-            if not self._exit_location:
-                self._exit_location = (x, y)
 
             for rx, ry in random_directions:
                 nx, ny = x + rx, y + ry
@@ -146,13 +143,21 @@ class Blobby(commands.Bot):
                 ):
                     continue
                 if self.board[nx][ny] == PLAYER_TILE:
-                    queue.clear()
-                    break
+                    continue
                 if self.board[nx][ny] == WALL_TILE:
                     queue.append((nx, ny))
                     break
+                if self.board[nx][ny] == EXIT_TILE:
+                    queue.clear()
+                    break
             if not queue:
                 self._player_location = (x, y)
+        # Pick exit and player from visited cells
+        self._exit_location = choice(visited_cells)
+        self._player_location = choice(visited_cells)
+
+        while self._player_location == self._exit_location:
+            self._player_location = choice(visited_cells)
         # Draw the board
         self.board[self._player_location[0]][self._player_location[1]] = PLAYER_TILE
         self.board[self._exit_location[0]][self._exit_location[1]] = EXIT_TILE

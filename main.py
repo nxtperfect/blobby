@@ -16,6 +16,7 @@ END_GAME_EMOJI = str("❌")
 class Blobby(commands.Bot):
     prefix: str = "#!"
     players_started_platformer: dict[str, int] = {}
+    levels: dict[str, int] = {}
     _board_size: int = 12
     board: list[list[int]]
     _movement: dict[str, tuple[int, int]] = {
@@ -91,34 +92,37 @@ class Blobby(commands.Bot):
             await channel.send("You already started platformer!")
             return
         self.players_started_platformer[member.id] = 1
-        embed = await self._start_platformer(member, channel)
-        await self._add_movement_keys(embed)
-        # If already started read movements
-        # Read reactions under message
-        # If user who started added reaction
-        # take the first one and move
-        # then reset reactions
-        # and loop again
-        reaction = await self.wait_for(
-            "reaction_add", check=lambda _, user: user.id == member.id
-        )
+        self.levels[member.id] = 1
+        message = await self._start_platformer(member, channel)
+        while True:
+            await self._add_movement_keys(message)
 
-        if str(reaction[0]) == END_GAME_EMOJI:
-            self.players_started_platformer[member.id] = 0
-            await channel.send("You quit platformer.")
-            return
-        await self._move(reaction[0])
-        # Redraw the board now
-        self._build_platformer_board()
-        # await channel.send(f"{member} reacted with {reaction[0]}")
+            reaction = await self.wait_for(
+                "reaction_add", check=lambda _, user: user.id == member.id
+            )
 
-    async def _start_platformer(self, member, channel):
-        board = self._build_platformer_board()
-        embedVar = discord.Embed(
-            title=f"Platformer game {member.global_name}",
+            if str(reaction[0]) == END_GAME_EMOJI:
+                self.players_started_platformer[member.id] = 0
+                await channel.send("You quit platformer.")
+                return
+            await self._move(str(reaction[0]))
+
+            # Redraw the board now
+            # self._build_platformer_board()
+            embed = self._create_embed(member)
+            await message.edit(embed=embed)
+
+    def _create_embed(self, member):
+        board = self._convert_raw_board_to_emoji()
+        return discord.Embed(
+            title=f"Platformer game for {member.global_name}. Level: {self.levels[member.id]}",
             description=board,
             color=0xFF0808,
         )
+
+    async def _start_platformer(self, member, channel):
+        self._build_platformer_board()
+        embedVar = self._create_embed(member)
         return await channel.send(embed=embedVar)
 
     def _build_platformer_board(self):
@@ -136,7 +140,7 @@ class Blobby(commands.Bot):
         visited_cells: list[tuple[int, int]] = []
 
         while queue:
-            x, y = queue.pop()
+            x, y = queue.popleft()
             visited_cells.append((x, y))
             shuffle(random_directions)
             self.board[x][y] = 0
@@ -164,10 +168,10 @@ class Blobby(commands.Bot):
         while self._player_location == self._exit_location:
             self._player_location = choice(visited_cells)
         # Draw the board
-        self.board[self._player_location[0]][self._player_location[1]] = PLAYER_TILE
-        self.board[self._exit_location[0]][self._exit_location[1]] = EXIT_TILE
+        # self.board[self._player_location[0]][self._player_location[1]] = PLAYER_TILE
+        self.board[self._exit_location[1]][self._exit_location[0]] = EXIT_TILE
         # print(self.board)
-        return self._convert_raw_board_to_emoji(self.board)
+        # return self._convert_raw_board_to_emoji()
 
     async def _add_movement_keys(self, message):
         await message.add_reaction(str("⬅️"))
@@ -177,28 +181,33 @@ class Blobby(commands.Bot):
         await message.add_reaction(str("❌"))
 
     async def _move(self, emoji):
-        move = self._movement.get(emoji, None)
+        move = self._movement.get(str(emoji), None)
         if not move:
             return False
 
         temp = np.add(self._player_location, move)
-        if temp[0] not in range(0, len(self._board)) or temp[1] not in range(
-            0, len(self._board[0])
+        if temp[0] not in range(0, len(self.board)) or temp[1] not in range(
+            0, len(self.board[0])
         ):
+            print("Not in range")
+            return False
+        if self.board[temp[0]][temp[1]] == WALL_TILE:
+            print(f"Invalid move {temp}")
             return False
         if temp[0] == self._exit_location[0] and temp[1] == self._exit_location[1]:
             self._is_game_finished = True
+        print(f"Changed from {self._player_location} to {temp}")
         self._player_location = temp
 
-    def _convert_raw_board_to_emoji(self, board: list[list[int]]):
+    def _convert_raw_board_to_emoji(self):
         final_board: list[list[int]] = []
-        for row in board:
+        for i, row in enumerate(self.board):
             new_row = []
-            for cell in row:
+            for j, cell in enumerate(row):
                 if cell == EXIT_TILE:
                     new_row.append("🚪")
                     continue
-                if cell == PLAYER_TILE:
+                if i == self._player_location[0] and j == self._player_location[1]:
                     new_row.append("👺")
                     continue
                 if cell == WALL_TILE:

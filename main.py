@@ -10,6 +10,7 @@ EMPTY_TILE = 0
 WALL_TILE = 1
 PLAYER_TILE = 2
 EXIT_TILE = 3
+END_GAME_EMOJI = str("❌")
 
 
 class Blobby(commands.Bot):
@@ -86,7 +87,7 @@ class Blobby(commands.Bot):
 
     async def platformer(self, member, channel):
         # Initialize the game if not already started
-        if member.id in self.players_started_platformer:
+        if self.players_started_platformer.get(member.id, 0):
             await channel.send("You already started platformer!")
             return
         self.players_started_platformer[member.id] = 1
@@ -102,6 +103,10 @@ class Blobby(commands.Bot):
             "reaction_add", check=lambda _, user: user.id == member.id
         )
 
+        if str(reaction[0]) == END_GAME_EMOJI:
+            self.players_started_platformer[member.id] = 0
+            await channel.send("You quit platformer.")
+            return
         await self._move(reaction[0])
         # Redraw the board now
         self._build_platformer_board()
@@ -169,6 +174,7 @@ class Blobby(commands.Bot):
         await message.add_reaction(str("➡️"))
         await message.add_reaction(str("⬆️"))
         await message.add_reaction(str("⬇️"))
+        await message.add_reaction(str("❌"))
 
     async def _move(self, emoji):
         move = self._movement.get(emoji, None)

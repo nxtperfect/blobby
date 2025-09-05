@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import discord
 from discord.ext import commands
 import numpy as np
-from random import choice, randrange, shuffle
+from random import choice, shuffle
 
 EMPTY_TILE = 0
 WALL_TILE = 1
@@ -108,7 +108,6 @@ class Blobby(commands.Bot):
             await self._move(str(reaction[0]))
 
             # Redraw the board now
-            # self._build_platformer_board()
             embed = self._create_embed(member)
             await message.edit(embed=embed)
 
@@ -167,11 +166,9 @@ class Blobby(commands.Bot):
 
         while self._player_location == self._exit_location:
             self._player_location = choice(visited_cells)
+
         # Draw the board
-        # self.board[self._player_location[0]][self._player_location[1]] = PLAYER_TILE
         self.board[self._exit_location[1]][self._exit_location[0]] = EXIT_TILE
-        # print(self.board)
-        # return self._convert_raw_board_to_emoji()
 
     async def _add_movement_keys(self, message):
         await message.add_reaction(str("⬅️"))
@@ -218,8 +215,6 @@ class Blobby(commands.Bot):
                     continue
                 print(f"Invalid cell in board {cell}")
             final_board.append(new_row)
-        # self.board = ''.join(['\n'.join(x) for x in final_board])
-        # return final_board
         return "\n".join(["".join(x) for x in final_board])
 
     def run(self):
@@ -227,7 +222,6 @@ class Blobby(commands.Bot):
 
 
 def main():
-    # print("Hello from blobby!")
     client = Blobby()
     client.run()
 

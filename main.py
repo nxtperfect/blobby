@@ -11,6 +11,7 @@ WALL_TILE = 1
 PLAYER_TILE = 2
 EXIT_TILE = 3
 END_GAME_EMOJI = str("❌")
+CONTINUE_GAME_EMOJI = str("✅")
 
 
 class Blobby(commands.Bot):
@@ -94,7 +95,8 @@ class Blobby(commands.Bot):
         self.players_started_platformer[member.id] = 1
         self.levels[member.id] = 1
         message = await self._start_platformer(member, channel)
-        while True:
+        print(f"Exit location at {self._exit_location}")
+        while not self._is_game_finished:
             await self._add_movement_keys(message)
 
             reaction = await self.wait_for(
@@ -111,11 +113,37 @@ class Blobby(commands.Bot):
             embed = self._create_embed(member)
             await message.edit(embed=embed)
 
+            if self._is_game_finished:
+                embed = self._create_embed_endgame(member)
+                await message.clear_reactions()
+                await message.edit(embed=embed)
+                await self._add_continue_reactions(message)
+                reaction = await self.wait_for(
+                    "reaction_add", check=lambda _, user: user.id == member.id
+                )
+
+                if str(reaction[0]) == CONTINUE_GAME_EMOJI:
+                    self._is_game_finished = False
+                    self.levels[member.id] += 1
+                    await message.clear_reactions()
+                    self._build_platformer_board()
+                    embed = self._create_embed(member)
+                    await message.edit(embed=embed)
+                    continue
+                break
+
     def _create_embed(self, member):
         board = self._convert_raw_board_to_emoji()
         return discord.Embed(
             title=f"Platformer game for {member.global_name}. Level: {self.levels[member.id]}",
             description=board,
+            color=0xFF0808,
+        )
+
+    def _create_embed_endgame(self, member):
+        return discord.Embed(
+            title=f"FINISHED {member.global_name}. Level: {self.levels[member.id]}",
+            description="You finished the level! React with ✅ to continue to next level or ❌ to exit.",
             color=0xFF0808,
         )
 
@@ -177,6 +205,10 @@ class Blobby(commands.Bot):
         await message.add_reaction(str("⬇️"))
         await message.add_reaction(str("❌"))
 
+    async def _add_continue_reactions(self, message):
+        await message.add_reaction(str("✅"))
+        await message.add_reaction(str("❌"))
+
     async def _move(self, emoji):
         move = self._movement.get(str(emoji), None)
         if not move:
@@ -193,7 +225,6 @@ class Blobby(commands.Bot):
             return False
         if temp[0] == self._exit_location[0] and temp[1] == self._exit_location[1]:
             self._is_game_finished = True
-        print(f"Changed from {self._player_location} to {temp}")
         self._player_location = temp
 
     def _convert_raw_board_to_emoji(self):
@@ -201,7 +232,7 @@ class Blobby(commands.Bot):
         for i, row in enumerate(self.board):
             new_row = []
             for j, cell in enumerate(row):
-                if cell == EXIT_TILE:
+                if i == self._exit_location[0] and j == self._exit_location[1]:
                     new_row.append("🚪")
                     continue
                 if i == self._player_location[0] and j == self._player_location[1]:
